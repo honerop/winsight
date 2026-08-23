@@ -66,9 +66,7 @@ impl FocusBackend for HyprlandBackend {
     }
 }
 
-// --- Sway: same idea as Hyprland, different socket + JSON event framing.
-// Reach for the `swayipc` crate (subscribe to the "window" event) rather
-// than hand-rolling the length-prefixed binary protocol yourself.
+// --- Sway: uses swayipc to subscribe to window focus events.
 struct SwayBackend;
 
 impl FocusBackend for SwayBackend {
@@ -76,10 +74,37 @@ impl FocusBackend for SwayBackend {
         "sway"
     }
 
-    fn run(self: Box<Self>, _tx: Sender<FocusEvent>) -> std::io::Result<()> {
-        // TODO: swayipc::Connection::new()?.subscribe([EventType::Window])?
-        // and match on WindowChange::Focus, sending FocusEvent on each.
-        unimplemented!("wire up the swayipc crate here")
+    fn run(self: Box<Self>, tx: Sender<FocusEvent>) -> std::io::Result<()> {
+        use swayipc::{
+            Connection,
+            EventType,
+            WindowChange,
+        };
+
+        let mut conn = Connection::new()?;
+        let mut events = conn.subscribe(&[EventType::Window])?;
+
+        while let Some(event) = events.next() {
+            match event {
+                Ok(swayipc::Event::Window(window_event)) => {
+                    if let WindowChange::Focus(window) = window_event.change {
+                        let window_name = window.name.clone();
+                        let window_class = window.app_id.clone();
+                        let window_identifier = window_name.or(window_class).or(Some("unknown".to_string()));
+                        let _ = tx.send(FocusEvent {
+                            window: Some(window_identifier),
+                            at: SystemTime::now(),
+                        });
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Sway IPC error: {}", e);
+                    break;
+                }
+            }
+        }
+
+        Ok(())
     }
 }
 

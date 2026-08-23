@@ -7,8 +7,8 @@ edition = "2021"
 
 # Only pulled in (and only compiled) when building for Linux.
 [target.'cfg(target_os = "linux")'.dependencies]
-# swayipc = "3"      # for the Sway backend
-# x11rb = "0.13"     # for the X11 backend
+swayipc = "3"      # for the Sway backend
+x11rb = "0.13"     # for the X11 backend
 
 # Only pulled in when building for macOS.
 [target.'cfg(target_os = "macos")'.dependencies]

@@ -1,1 +1,1 @@
-/home/me/o/window-time-tracker/target/debug/window-time-tracker: /home/me/o/window-time-tracker/src/backend/linux.rs /home/me/o/window-time-tracker/src/backend/mod.rs /home/me/o/window-time-tracker/src/main.rs
+/home/me/dev/winsight/target/debug/window-time-tracker: /home/me/dev/winsight/src/backend/linux.rs /home/me/dev/winsight/src/backend/mod.rs /home/me/dev/winsight/src/main.rs
