@@ -75,28 +75,31 @@ impl FocusBackend for SwayBackend {
     }
 
     fn run(self: Box<Self>, tx: Sender<FocusEvent>) -> std::io::Result<()> {
-        use swayipc::{
-            Connection,
-            EventType,
-            WindowChange,
-        };
+        use swayipc::{Connection, EventType, WindowChange};
 
-        let mut conn = Connection::new()?;
-        let mut events = conn.subscribe(&[EventType::Window])?;
+        let mut conn = Connection::new()
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let mut events = conn
+            .subscribe(&[EventType::Window])
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
         while let Some(event) = events.next() {
             match event {
                 Ok(swayipc::Event::Window(window_event)) => {
-                    if let WindowChange::Focus(window) = window_event.change {
-                        let window_name = window.name.clone();
-                        let window_class = window.app_id.clone();
-                        let window_identifier = window_name.or(window_class).or(Some("unknown".to_string()));
+                    if window_event.change == WindowChange::Focus {
+                        let container = &window_event.container;
+                        let window_name = container.name.clone();
+                        let window_class = container.app_id.clone();
+                        let window_identifier =
+                            window_name.or(window_class).or(Some("unknown".to_string()));
+
                         let _ = tx.send(FocusEvent {
-                            window: Some(window_identifier),
+                            window: window_identifier,
                             at: SystemTime::now(),
                         });
                     }
                 }
+                Ok(_) => {} // other event types we didn't subscribe to; ignore
                 Err(e) => {
                     eprintln!("Sway IPC error: {}", e);
                     break;
@@ -106,6 +109,21 @@ impl FocusBackend for SwayBackend {
 
         Ok(())
     }
+}
+
+
+x11rb::atom_manager! {
+    Atoms: AtomsCookie {
+        _NET_ACTIVE_WINDOW,
+        _NET_WM_NAME,
+        WM_NAME,
+        WM_CLASS,
+        UTF8_STRING,
+    }
+}
+
+fn io_err<E: std::fmt::Display>(e: E) -> std::io::Error {
+    std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
 }
 
 // --- X11 (any X11 WM: i3, bspwm, XFCE, etc.): watch _NET_ACTIVE_WINDOW on
@@ -119,10 +137,126 @@ impl FocusBackend for X11Backend {
         "x11"
     }
 
-    fn run(self: Box<Self>, _tx: Sender<FocusEvent>) -> std::io::Result<()> {
-        // TODO: x11rb — select PropertyChangeMask on the root window,
-        // read _NET_ACTIVE_WINDOW on each PropertyNotify, then fetch
-        // WM_CLASS for that window id and send a FocusEvent.
-        unimplemented!("wire up x11rb here")
+    fn run(self: Box<Self>, tx: Sender<FocusEvent>) -> std::io::Result<()> {
+        use x11rb::connection::Connection;
+        use x11rb::protocol::xproto::{ChangeWindowAttributesAux, ConnectionExt, EventMask, Window};
+        use x11rb::protocol::Event;
+
+        let (conn, screen_num) = x11rb::connect(None).map_err(io_err)?;
+        let root = conn.setup().roots[screen_num].root;
+        let atoms = Atoms::new(&conn).map_err(io_err)?.reply().map_err(io_err)?;
+
+        // Root window announces focus changes via PropertyNotify on
+        // _NET_ACTIVE_WINDOW — this is the "subscribe" step.
+        conn.change_window_attributes(
+            root,
+            &ChangeWindowAttributesAux::new().event_mask(EventMask::PROPERTY_CHANGE),
+        )
+        .map_err(io_err)?
+        .check()
+        .map_err(io_err)?;
+
+        let mut watched: Option<Window> = None;
+
+        // Prime with whatever's focused right now.
+        if let Some(win) = get_active_window(&conn, root, atoms._NET_ACTIVE_WINDOW).map_err(io_err)? {
+            watch_title(&conn, win).map_err(io_err)?;
+            watched = Some(win);
+            let title = get_title(&conn, &atoms, win).map_err(io_err)?;
+            let _ = tx.send(FocusEvent { window: title, at: SystemTime::now() });
+        }
+
+        loop {
+            let event = conn.wait_for_event().map_err(io_err)?;
+            match event {
+                Event::PropertyNotify(ev)
+                    if ev.window == root && ev.atom == atoms._NET_ACTIVE_WINDOW =>
+                {
+                    match get_active_window(&conn, root, atoms._NET_ACTIVE_WINDOW).map_err(io_err)? {
+                        Some(win) => {
+                            if watched != Some(win) {
+                                watch_title(&conn, win).map_err(io_err)?;
+                                watched = Some(win);
+                            }
+                            let title = get_title(&conn, &atoms, win).map_err(io_err)?;
+                            let _ = tx.send(FocusEvent { window: title, at: SystemTime::now() });
+                        }
+                        None => {
+                            watched = None;
+                            let _ = tx.send(FocusEvent { window: None, at: SystemTime::now() });
+                        }
+                    }
+                }
+                // Title changed on the window we're currently watching,
+                // without a focus change (e.g. tab switch inside a browser).
+                Event::PropertyNotify(ev)
+                    if Some(ev.window) == watched
+                        && (ev.atom == atoms._NET_WM_NAME || ev.atom == atoms.WM_NAME) =>
+                {
+                    let title = get_title(&conn, &atoms, ev.window).map_err(io_err)?;
+                    let _ = tx.send(FocusEvent { window: title, at: SystemTime::now() });
+                }
+                _ => {}
+            }
+        }
     }
+}
+
+fn get_active_window<C: x11rb::connection::Connection>(
+    conn: &C,
+    root: x11rb::protocol::xproto::Window,
+    net_active_window: x11rb::protocol::xproto::Atom,
+) -> Result<Option<x11rb::protocol::xproto::Window>, x11rb::errors::ReplyError> {
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
+    let reply = conn
+        .get_property(false, root, net_active_window, AtomEnum::WINDOW, 0, 1)?
+        .reply()?;
+    Ok(reply.value32().and_then(|mut v| v.next()).filter(|&w| w != 0))
+}
+
+fn watch_title<C: x11rb::connection::Connection>(
+    conn: &C,
+    win: x11rb::protocol::xproto::Window,
+) -> Result<(), x11rb::errors::ReplyError> {
+    use x11rb::protocol::xproto::{ChangeWindowAttributesAux, ConnectionExt, EventMask};
+    conn.change_window_attributes(
+        win,
+        &ChangeWindowAttributesAux::new().event_mask(EventMask::PROPERTY_CHANGE),
+    )?
+    .check()?;
+    Ok(())
+}
+
+fn get_title<C: x11rb::connection::Connection>(
+    conn: &C,
+    atoms: &Atoms,
+    win: x11rb::protocol::xproto::Window,
+) -> Result<Option<String>, x11rb::errors::ReplyError> {
+    use x11rb::protocol::xproto::{AtomEnum, ConnectionExt};
+
+    let reply = conn
+        .get_property(false, win, atoms._NET_WM_NAME, atoms.UTF8_STRING, 0, 1024)?
+        .reply()?;
+    if !reply.value.is_empty() {
+        if let Ok(s) = String::from_utf8(reply.value) {
+            return Ok(Some(s));
+        }
+    }
+
+    let reply = conn
+        .get_property(false, win, atoms.WM_CLASS, AtomEnum::STRING, 0, 1024)?
+        .reply()?;
+    if !reply.value.is_empty() {
+        if let Some(class) = reply
+            .value
+            .split(|&b| b == 0)
+            .filter_map(|s| std::str::from_utf8(s).ok())
+            .filter(|s| !s.is_empty())
+            .last()
+        {
+            return Ok(Some(class.to_string()));
+        }
+    }
+
+    Ok(None)
 }
