@@ -12,7 +12,7 @@ fn data_file() -> PathBuf {
     let home = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE")) // Windows fallback
         .unwrap_or_else(|_| "/tmp".into());
-    let dir = PathBuf::from(home).join(".local/share/window-time-tracker");
+    let dir = PathBuf::from(home).join(".local/share/winsight");
     fs::create_dir_all(&dir).ok();
     dir.join("durations.tsv")
 }
