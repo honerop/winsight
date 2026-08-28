@@ -1,4 +1,3 @@
-
 use super::{FocusBackend, FocusEvent};
 use std::cell::RefCell;
 use std::sync::mpsc::Sender;
@@ -11,9 +10,8 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::Accessibility::{SetWinEventHook, HWINEVENTHOOK};
 use windows::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, GetMessageW, GetWindowTextW, GetWindowThreadProcessId,
-    TranslateMessage, EVENT_OBJECT_NAMECHANGE, EVENT_SYSTEM_FOREGROUND, MSG,
-    OBJID_WINDOW, WINEVENT_OUTOFCONTEXT,
+    DispatchMessageW, GetMessageW, GetWindowTextW, GetWindowThreadProcessId, TranslateMessage,
+    EVENT_OBJECT_NAMECHANGE, EVENT_SYSTEM_FOREGROUND, MSG, OBJID_WINDOW, WINEVENT_OUTOFCONTEXT,
 };
 
 // The Win32 hook callback is a bare `extern "system" fn` — no closures,
@@ -119,7 +117,12 @@ unsafe fn window_identifier(hwnd: HWND) -> Option<String> {
         return None;
     }
 
-    let process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ, false, pid).ok()?;
+    let process = OpenProcess(
+        PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_VM_READ,
+        false,
+        pid,
+    )
+    .ok()?;
     let mut name_buf = [0u16; MAX_PATH as usize];
     let len = K32GetModuleBaseNameW(process, None, &mut name_buf);
     if len > 0 {

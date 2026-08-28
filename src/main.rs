@@ -38,7 +38,12 @@ fn save(path: &PathBuf, map: &HashMap<String, Duration>) {
     for (name, dur) in entries {
         out.push_str(&format!("{}\t{}\n", name, dur.as_secs()));
     }
-    if let Ok(mut f) = OpenOptions::new().write(true).create(true).truncate(true).open(path) {
+    if let Ok(mut f) = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(path)
+    {
         let _ = f.write_all(out.as_bytes());
     }
 }
@@ -62,10 +67,7 @@ fn main() -> std::io::Result<()> {
 
     for event in rx {
         if let Some(prev) = &current {
-            let elapsed = event
-                .at
-                .duration_since(since)
-                .unwrap_or(Duration::ZERO);
+            let elapsed = event.at.duration_since(since).unwrap_or(Duration::ZERO);
             *durations.entry(prev.clone()).or_insert(Duration::ZERO) += elapsed;
             save(&path, &durations);
         }

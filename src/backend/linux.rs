@@ -59,7 +59,10 @@ impl FocusBackend for HyprlandBackend {
             if let Some(rest) = line.strip_prefix("activewindow>>") {
                 let class = rest.splitn(2, ',').next().unwrap_or("").to_string();
                 let window = if class.is_empty() { None } else { Some(class) };
-                let _ = tx.send(FocusEvent { window, at: SystemTime::now() });
+                let _ = tx.send(FocusEvent {
+                    window,
+                    at: SystemTime::now(),
+                });
             }
         }
         Ok(())
@@ -111,7 +114,6 @@ impl FocusBackend for SwayBackend {
     }
 }
 
-
 x11rb::atom_manager! {
     Atoms: AtomsCookie {
         _NET_ACTIVE_WINDOW,
@@ -139,7 +141,9 @@ impl FocusBackend for X11Backend {
 
     fn run(self: Box<Self>, tx: Sender<FocusEvent>) -> std::io::Result<()> {
         use x11rb::connection::Connection;
-        use x11rb::protocol::xproto::{ChangeWindowAttributesAux, ConnectionExt, EventMask, Window};
+        use x11rb::protocol::xproto::{
+            ChangeWindowAttributesAux, ConnectionExt, EventMask, Window,
+        };
         use x11rb::protocol::Event;
 
         let (conn, screen_num) = x11rb::connect(None).map_err(io_err)?;
@@ -159,11 +163,16 @@ impl FocusBackend for X11Backend {
         let mut watched: Option<Window> = None;
 
         // Prime with whatever's focused right now.
-        if let Some(win) = get_active_window(&conn, root, atoms._NET_ACTIVE_WINDOW).map_err(io_err)? {
+        if let Some(win) =
+            get_active_window(&conn, root, atoms._NET_ACTIVE_WINDOW).map_err(io_err)?
+        {
             watch_title(&conn, win).map_err(io_err)?;
             watched = Some(win);
             let title = get_title(&conn, &atoms, win).map_err(io_err)?;
-            let _ = tx.send(FocusEvent { window: title, at: SystemTime::now() });
+            let _ = tx.send(FocusEvent {
+                window: title,
+                at: SystemTime::now(),
+            });
         }
 
         loop {
@@ -172,18 +181,26 @@ impl FocusBackend for X11Backend {
                 Event::PropertyNotify(ev)
                     if ev.window == root && ev.atom == atoms._NET_ACTIVE_WINDOW =>
                 {
-                    match get_active_window(&conn, root, atoms._NET_ACTIVE_WINDOW).map_err(io_err)? {
+                    match get_active_window(&conn, root, atoms._NET_ACTIVE_WINDOW)
+                        .map_err(io_err)?
+                    {
                         Some(win) => {
                             if watched != Some(win) {
                                 watch_title(&conn, win).map_err(io_err)?;
                                 watched = Some(win);
                             }
                             let title = get_title(&conn, &atoms, win).map_err(io_err)?;
-                            let _ = tx.send(FocusEvent { window: title, at: SystemTime::now() });
+                            let _ = tx.send(FocusEvent {
+                                window: title,
+                                at: SystemTime::now(),
+                            });
                         }
                         None => {
                             watched = None;
-                            let _ = tx.send(FocusEvent { window: None, at: SystemTime::now() });
+                            let _ = tx.send(FocusEvent {
+                                window: None,
+                                at: SystemTime::now(),
+                            });
                         }
                     }
                 }
@@ -194,7 +211,10 @@ impl FocusBackend for X11Backend {
                         && (ev.atom == atoms._NET_WM_NAME || ev.atom == atoms.WM_NAME) =>
                 {
                     let title = get_title(&conn, &atoms, ev.window).map_err(io_err)?;
-                    let _ = tx.send(FocusEvent { window: title, at: SystemTime::now() });
+                    let _ = tx.send(FocusEvent {
+                        window: title,
+                        at: SystemTime::now(),
+                    });
                 }
                 _ => {}
             }
@@ -211,7 +231,10 @@ fn get_active_window<C: x11rb::connection::Connection>(
     let reply = conn
         .get_property(false, root, net_active_window, AtomEnum::WINDOW, 0, 1)?
         .reply()?;
-    Ok(reply.value32().and_then(|mut v| v.next()).filter(|&w| w != 0))
+    Ok(reply
+        .value32()
+        .and_then(|mut v| v.next())
+        .filter(|&w| w != 0))
 }
 
 fn watch_title<C: x11rb::connection::Connection>(

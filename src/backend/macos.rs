@@ -1,10 +1,9 @@
-
 use super::{FocusBackend, FocusEvent};
 use std::sync::mpsc::Sender;
 use std::time::SystemTime;
 
-use objc2::rc::Retained;
 use objc2::msg_send;
+use objc2::rc::Retained;
 use objc2_app_kit::{NSRunningApplication, NSWorkspace};
 use objc2_foundation::{MainThreadMarker, NSNotification, NSOperationQueue};
 
@@ -61,11 +60,12 @@ impl FocusBackend for MacOsBackend {
             let tx_for_block = tx.clone();
             let block = block2::RcBlock::new(move |note: std::ptr::NonNull<NSNotification>| {
                 let note = note.as_ref();
-                let app: Option<Retained<NSRunningApplication>> = note.userInfo().and_then(|info| {
-                    let key = objc2_foundation::ns_string!("NSWorkspaceApplicationKey");
-                    info.objectForKey(key)
-                        .map(|obj| Retained::cast::<NSRunningApplication>(obj))
-                });
+                let app: Option<Retained<NSRunningApplication>> =
+                    note.userInfo().and_then(|info| {
+                        let key = objc2_foundation::ns_string!("NSWorkspaceApplicationKey");
+                        info.objectForKey(key)
+                            .map(|obj| Retained::cast::<NSRunningApplication>(obj))
+                    });
 
                 let window = app.as_deref().and_then(app_identifier);
                 let _ = tx_for_block.send(FocusEvent {
@@ -74,7 +74,8 @@ impl FocusBackend for MacOsBackend {
                 });
             });
 
-            let name = objc2_foundation::ns_string!("NSWorkspaceDidActivateApplicationNotification");
+            let name =
+                objc2_foundation::ns_string!("NSWorkspaceDidActivateApplicationNotification");
             let _: () = msg_send![
                 &*center,
                 addObserverForName: name,
