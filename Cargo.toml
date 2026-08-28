@@ -14,8 +14,13 @@ x11rb = "0.13"     # for the X11 backend
 
 # Only pulled in when building for macOS.
 [target.'cfg(target_os = "macos")'.dependencies]
- objc2 = "0.5"
- objc2-app-kit = "0.2"
+objc2 = "0.5"
+objc2-app-kit = "0.2"
+block2 = "0.5"
+objc2-app-kit = { version = "0.2", features = [
+    "NSWorkspace",
+    "NSRunningApplication",
+] }
 
 # Only pulled in when building for Windows.
 [target.'cfg(target_os = "windows")'.dependencies]
