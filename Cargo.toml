@@ -1,7 +1,9 @@
 [package]
-name = "window-time-tracker"
+name = "winsight"
 version = "0.1.0"
 edition = "2021"
+description = "Window time tracker"
+license = "MIT"
 
 [dependencies]
 
