@@ -28,10 +28,9 @@ objc2-app-kit = { version = "0.2", features = [
 ] }
 objc2-foundation = { version = "0.2", features = [
     "std",
-    "NSThread",
-    "NSRunLoop",
-    "NSOperationQueue",
     "NSNotification",
+    "NSOperation",
+    "NSRunLoop",
 ] }
 
 # Only pulled in when building for Windows.
