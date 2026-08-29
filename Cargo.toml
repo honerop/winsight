@@ -26,6 +26,7 @@ objc2-app-kit = { version = "0.2", features = [
     "NSWorkspace",
     "NSRunningApplication",
 ] }
+objc2-foundation = "0.2"
 
 # Only pulled in when building for Windows.
 [target.'cfg(target_os = "windows")'.dependencies]
