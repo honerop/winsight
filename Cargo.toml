@@ -1,6 +1,12 @@
 [package]
 name = "winsight"
 version = "0.1.0"
+authors = ["honerop <vi900@proton.me>"]
+repository = "https://github.com/honerop/winsight"
+homepage = "https://github.com/honerop/winsight"
+readme = "README.md"
+keywords = ["time-tracking", "productivity", "window", "cli"]
+categories = ["command-line-utilities"]
 edition = "2021"
 description = "Window time tracker"
 license = "MIT"
