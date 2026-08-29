@@ -67,7 +67,7 @@ impl FocusBackend for MacOsBackend {
                             .map(|obj| Retained::cast::<NSRunningApplication>(obj))
                     });
 
-                let window = app.as_deref().and_then(app_identifier);
+                let window = app.as_deref().and_then(|a| unsafe { app_identifier(a) });
                 let _ = tx_for_block.send(FocusEvent {
                     window,
                     at: SystemTime::now(),
