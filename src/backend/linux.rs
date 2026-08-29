@@ -1,3 +1,4 @@
+
 use super::{FocusBackend, FocusEvent};
 use std::env;
 use std::io::{BufRead, BufReader};
@@ -57,7 +58,7 @@ impl FocusBackend for HyprlandBackend {
         for line in BufReader::new(stream).lines() {
             let line = line?;
             if let Some(rest) = line.strip_prefix("activewindow>>") {
-                let class = rest.splitn(2, ',').next().unwrap_or("").to_string();
+                let class = rest.split(',').next().unwrap_or("").to_string();
                 let window = if class.is_empty() { None } else { Some(class) };
                 let _ = tx.send(FocusEvent {
                     window,
@@ -80,13 +81,12 @@ impl FocusBackend for SwayBackend {
     fn run(self: Box<Self>, tx: Sender<FocusEvent>) -> std::io::Result<()> {
         use swayipc::{Connection, EventType, WindowChange};
 
-        let mut conn = Connection::new()
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
-        let mut events = conn
-            .subscribe(&[EventType::Window])
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
+        let conn = Connection::new().map_err(|e| std::io::Error::other(e.to_string()))?;
+        let events = conn
+            .subscribe([EventType::Window])
+            .map_err(|e| std::io::Error::other(e.to_string()))?;
 
-        while let Some(event) = events.next() {
+        for event in events {
             match event {
                 Ok(swayipc::Event::Window(window_event)) => {
                     if window_event.change == WindowChange::Focus {
@@ -125,7 +125,7 @@ x11rb::atom_manager! {
 }
 
 fn io_err<E: std::fmt::Display>(e: E) -> std::io::Error {
-    std::io::Error::new(std::io::ErrorKind::Other, e.to_string())
+    std::io::Error::other(e.to_string())
 }
 
 // --- X11 (any X11 WM: i3, bspwm, XFCE, etc.): watch _NET_ACTIVE_WINDOW on
@@ -275,7 +275,7 @@ fn get_title<C: x11rb::connection::Connection>(
             .split(|&b| b == 0)
             .filter_map(|s| std::str::from_utf8(s).ok())
             .filter(|s| !s.is_empty())
-            .last()
+            .next_back()
         {
             return Ok(Some(class.to_string()));
         }
