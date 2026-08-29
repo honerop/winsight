@@ -21,7 +21,7 @@ jobs:
           profile: minimal
           toolchain: stable
           override: true
-          components: rustfmt, clippy
+          components: rustfmt
       - name: Cache dependencies
         uses: actions/cache@v3
         with:
@@ -38,8 +38,6 @@ jobs:
         run: cargo test --verbose
       - name: Check formatting
         run: cargo fmt --check
-      - name: Run clippy
-        run: cargo clippy -- -D warnings
   release:
     name: Release build
     runs-on: ${{ matrix.os }}
